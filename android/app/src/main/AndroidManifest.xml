@@ -3,6 +3,9 @@
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.INTERNET" />
 
+
+
+
     <application
         android:label="otopark_app"
         android:name="${applicationName}"
@@ -49,4 +52,5 @@
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
+    
 </manifest>
