@@ -20,6 +20,7 @@ class MyApp extends StatelessWidget {
       ),
       home: const MapScreen(),
       debugShowCheckedModeBanner: false,
+      
     );
   }
 }

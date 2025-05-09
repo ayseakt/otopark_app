@@ -37,12 +37,82 @@ class _MapScreenState extends State<MapScreen> {
   
   // Tüm otopark verileri
   List<Map<String, dynamic>> _allParkingData = [];
-
+    
+ final List<Map<String, dynamic>> _favoriteParkingSpots = [];
+  
+  bool _isFavoriteParking(Map<String, dynamic> parking) {
+    final parkingId = parking['OTOPARK_ADI']?.toString() ?? '';
+    return _favoriteParkingSpots.any((favParking) => 
+      favParking['OTOPARK_ADI']?.toString() == parkingId);
+  }
   // Yükleniyor durumu
   bool _isLoading = true;
   StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
+void _toggleFavorite(Map<String, dynamic> parking) {
+  setState(() {
+    if (_isFavoriteParking(parking)) {
+      _favoriteParkingSpots.removeWhere((favParking) => 
+        favParking['OTOPARK_ADI'] == parking['OTOPARK_ADI']);
+    } else {
+      _favoriteParkingSpots.add(parking);
+    }
+  });
+}
+  void _showFavoritesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Favori Otoparklar'),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _favoriteParkingSpots.isEmpty
+              ? const Center(
+                  child: Text('Henüz favori otopark eklenmedi',
+                      textAlign: TextAlign.center),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _favoriteParkingSpots.length,
+                  itemBuilder: (context, index) {
+                    final parking = _favoriteParkingSpots[index];
+                    return ListTile(
+                      title: Text(parking['OTOPARK_ADI'] ?? 'Bilinmeyen'),
+                      subtitle: Text(parking['ADRES'] ?? 'Adres yok'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.pop(context);
+                        
+                        // Navigate to the parking spot on the map
+                        final lat = double.tryParse(parking['ENLEM']?.toString() ?? '') ?? 0;
+                        final lng = double.tryParse(parking['BOYLAM']?.toString() ?? '') ?? 0;
+                        
+                        if (lat != 0 && lng != 0) {
+                          _mapController?.animateCamera(
+                            CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16),
+                          );
+                          
+                          // Show detail bottom sheet
+                          _showParkingDetailsBottomSheet(parking);
+                        }
+                      },
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
   void initState() {
     super.initState();
     
@@ -304,7 +374,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
     builder: (context) {
       // Favorilere eklenip eklenmediğini kontrol etmek için bir değişken
       // StatefulBuilder içinde tanımlandı
-      bool isFavorite = false;
+      bool isFavorite = _isFavoriteParking(parking);
       
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setModalState) {
@@ -351,18 +421,18 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                             onPressed: () {
                               setModalState(() {
                                 isFavorite = !isFavorite;
-                                
+                                _toggleFavorite(parking); // <-- Add this
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(isFavorite 
-                                      ? 'Favorilere eklendi' 
-                                      : 'Favorilerden çıkarıldı'
-                                    ),
+                                        ? 'Favorilere eklendi' 
+                                        : 'Favorilerden çıkarıldı'),
                                     duration: const Duration(seconds: 1),
                                   ),
                                 );
                               });
                             },
+
                           ),
                         ],
                       ),
@@ -645,6 +715,14 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
       appBar: AppBar(
         title: const Text('EgeParkGo', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF246AFB),
+        actions: [
+          // Add this button to the AppBar
+          IconButton(
+            icon: const Icon(Icons.favorite, color: Colors.white),
+            onPressed: _showFavoritesDialog,
+            tooltip: 'Favoriler',
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -762,21 +840,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Otopark Tipleri',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  _buildLegendItem(BitmapDescriptor.hueBlue, 'Normal'),
-                  _buildLegendItem(BitmapDescriptor.hueGreen, 'Ücretsiz'),
-                  _buildLegendItem(BitmapDescriptor.hueViolet, 'Ücretli'),
-                  _buildLegendItem(BitmapDescriptor.hueRed, 'Kapalı'),
-                ],
-              ),
+
             ),
           ),
         ],
