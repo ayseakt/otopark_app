@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -38,66 +40,37 @@ class _MapScreenState extends State<MapScreen> {
 
   // Yükleniyor durumu
   bool _isLoading = true;
+  StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
   void initState() {
     super.initState();
-    Future<void> _fetchAndSetParkingMarkers() async {
-  setState(() {
-    _isLoading = true;
-  });
-
-  const url =
-      'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&limit=500';
-
-  try {
-    debugPrint('Fetching data from API...');
-    final response = await http.get(Uri.parse(url));
-    debugPrint('API Response status code: ${response.statusCode}');
     
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      debugPrint('API Response decoded successfully');
-      
-      final List records = data['result']['records'];
-      debugPrint('Found ${records.length} parking records');
-
-      // Tüm parkların verilerini saklama
-      _allParkingData = List<Map<String, dynamic>>.from(records.map((record) => 
-        Map<String, dynamic>.from(record)
-      ));
-
-      // Print some sample data to verify it's valid
-      if (_allParkingData.isNotEmpty) {
-        debugPrint('Sample parking data: ${_allParkingData[0]}');
-      }
-
-      // Filtreleme olmadan tüm işaretçileri ayarlama
-      _applyFilters();
-    } else {
-      debugPrint('API error response body: ${response.body}');
-      throw Exception('API hatası: ${response.statusCode}');
-    }
-  } catch (e) {
-    debugPrint('Veri çekme hatası: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Veriler çekilirken hata oluştu: $e')),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-}
     _getCurrentLocation();
+    _listenToLocationChanges();
+    _fetchAndSetParkingMarkers(); // İlk veriler yüklenirken çağır
+  }
+
+  void _listenToLocationChanges() {
+    const LocationSettings locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 10, // 10 metre arayla güncelleme
+    );
+    
+    _positionStreamSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen((Position position) {
+      setState(() {
+        _userLocation = LatLng(position.latitude, position.longitude);
+        // Debug bilgisi yazdır
+        debugPrint('Konum güncellendi: ${position.latitude}, ${position.longitude}');
+      });
+    });
   }
 
   @override
   void dispose() {
+    _positionStreamSubscription?.cancel();
     _mapController?.dispose();
     _searchController.dispose();
     super.dispose();
@@ -106,17 +79,42 @@ class _MapScreenState extends State<MapScreen> {
   // Kullanıcı konumunu alma
   Future<void> _getCurrentLocation() async {
     try {
+      // Konum iznini kontrol et ve gerekirse iste
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          if (!mounted) return; // mounted kontrolü
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Konum izni olmadan konumunuzu gösteremiyoruz')),
+          );
           return;
         }
       }
 
+      // Konum servisinin açık olup olmadığını kontrol et
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return; // mounted kontrolü
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lütfen konum servisini açınız')),
+        );
+        // Kullanıcıdan konum servisini açmasını isteme
+        await Geolocator.openLocationSettings();
+        return;
+      }
+
+      // Konumu al
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
+      // Debug için konum bilgilerini yazdır
+      debugPrint('Alınan konum: ${position.latitude}, ${position.longitude}');
+
+      if (!mounted) return; // mounted kontrolü
 
       setState(() {
         _userLocation = LatLng(position.latitude, position.longitude);
@@ -129,6 +127,11 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       debugPrint('Konum alma hatası: $e');
+      if (!mounted) return; // mounted kontrolü
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Konum alınamadı: $e')),
+      );
     }
   }
 
@@ -139,10 +142,13 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     const url =
-        'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&limit=500';
+        'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&limit=5';
 
     try {
       final response = await http.get(Uri.parse(url));
+      
+      if (!mounted) return; // mounted kontrolü
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List records = data['result']['records'];
@@ -159,13 +165,13 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       debugPrint('Veri çekme hatası: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Veriler çekilirken hata oluştu: $e')),
-        );
-      }
+      if (!mounted) return; // mounted kontrolü
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Veriler çekilirken hata oluştu: $e')),
+      );
     } finally {
-      if (mounted) {
+      if (mounted) { // mounted kontrolü
         setState(() {
           _isLoading = false;
         });
@@ -189,173 +195,296 @@ class _MapScreenState extends State<MapScreen> {
 
   // Filtreleri uygulama
   void _applyFilters() async {
-  debugPrint('Applying filters to ${_allParkingData.length} parking data items');
-  
-  // Filtreleme kriterleri
-  List<Map<String, dynamic>> filteredData = List.from(_allParkingData);
-
-  if (_showEmptyParkingSpots) {
-    filteredData = filteredData.where((parking) {
-      final capacity = int.tryParse(parking['KAPASITE']?.toString() ?? '0') ?? 0;
-      final estimatedUsage = (capacity * 0.7).toInt(); // Tahmini kullanım
-      return capacity > estimatedUsage; // %70'ten az doluluk
-    }).toList();
-  }
-
-  if (_showFreeParking) {
-    filteredData = filteredData.where((parking) {
-      final parkType = parking['UCRET_DURUMU']?.toString() ?? '';
-      return parkType.toUpperCase().contains('UCRETSIZ');
-    }).toList();
-  }
-
-  if (_show24HourParking) {
-    filteredData = filteredData.where((parking) {
-      final workHours = parking['CALISMA_SAATLERI']?.toString() ?? '';
-      return workHours.contains('24') || workHours.toUpperCase().contains('24 SAAT');
-    }).toList();
-  }
-
-  debugPrint('After filtering: ${filteredData.length} parking spots remain');
-
-  // İşaretçileri oluştur
-  final Set<Marker> newMarkers = {};
-  int validCoordinates = 0;
-  
-  for (var parking in filteredData) {
-    final lat = double.tryParse(parking['ENLEM']?.toString() ?? '') ?? 0;
-    final lng = double.tryParse(parking['BOYLAM']?.toString() ?? '') ?? 0;
+    debugPrint('Applying filters to ${_allParkingData.length} parking data items');
     
-    // Geçersiz koordinatları kontrol et
-    if (lat == 0 || lng == 0 || lat < 30 || lat > 45 || lng < 20 || lng > 35) {
-      debugPrint('Invalid coordinates for ${parking['OTOPARK_ADI']}: $lat, $lng');
-      continue;
+    // Filtreleme kriterleri
+    List<Map<String, dynamic>> filteredData = List.from(_allParkingData);
+
+    if (_showEmptyParkingSpots) {
+      filteredData = filteredData.where((parking) {
+        final capacity = int.tryParse(parking['KAPASITE']?.toString() ?? '0') ?? 0;
+        final estimatedUsage = (capacity * 0.7).toInt(); // Tahmini kullanım
+        return capacity > estimatedUsage; // %70'ten az doluluk
+      }).toList();
     }
-    
-    validCoordinates++;
-    final name = parking['OTOPARK_ADI'] ?? 'Bilinmeyen';
-    final capacity = parking['KAPASITE'] ?? 'Bilinmiyor';
-    final parkingType = parking['UCRET_DURUMU'] ?? 'Bilinmiyor';
-    final workHours = parking['CALISMA_SAATLERI'] ?? 'Bilinmiyor';
-    
-    // Park tipi belirleme
-    String parkType = 'NORMAL';
-    if (parkingType.toString().toUpperCase().contains('UCRETSIZ')) {
-      parkType = 'UCRETSIZ';
-    } else if (parkingType.toString().toUpperCase().contains('UCRETLI')) {
-      parkType = 'UCRETLI';
-    } else if (parkingType.toString().toUpperCase().contains('KAPALI')) {
-      parkType = 'KAPALI';
+
+    if (_showFreeParking) {
+      filteredData = filteredData.where((parking) {
+        final parkType = parking['UCRET_DURUMU']?.toString() ?? '';
+        return parkType.toUpperCase().contains('UCRETSIZ');
+      }).toList();
     }
+
+    if (_show24HourParking) {
+      filteredData = filteredData.where((parking) {
+        final workHours = parking['CALISMA_SAATLERI']?.toString() ?? '';
+        return workHours.contains('24') || workHours.toUpperCase().contains('24 SAAT');
+      }).toList();
+    }
+
+    debugPrint('After filtering: ${filteredData.length} parking spots remain');
+
+    // İşaretçileri oluştur
+    final Set<Marker> newMarkers = {};
+    int validCoordinates = 0;
     
-    try {
-      final icon = await _getMarkerIcon(parkType);
+    for (var parking in filteredData) {
+      final lat = double.tryParse(parking['ENLEM']?.toString() ?? '') ?? 0;
+      final lng = double.tryParse(parking['BOYLAM']?.toString() ?? '') ?? 0;
       
-      newMarkers.add(
-        Marker(
-          markerId: MarkerId(name),
-          position: LatLng(lat, lng),
-          infoWindow: InfoWindow(
-            title: name,
-            snippet: 'Kapasite: $capacity\nÇalışma Saatleri: $workHours\nÜcret: $parkingType',
+      // Geçersiz koordinatları kontrol et
+      if (lat == 0 || lng == 0 || lat < 30 || lat > 45 || lng < 20 || lng > 35) {
+        debugPrint('Invalid coordinates for ${parking['OTOPARK_ADI']}: $lat, $lng');
+        continue;
+      }
+      
+      validCoordinates++;
+      final name = parking['OTOPARK_ADI'] ?? 'Bilinmeyen';
+      final capacity = parking['KAPASITE'] ?? 'Bilinmiyor';
+      final parkingType = parking['UCRET_DURUMU'] ?? 'Bilinmiyor';
+      final workHours = parking['CALISMA_SAATLERI'] ?? 'Bilinmiyor';
+      
+      // Park tipi belirleme
+      String parkType = 'NORMAL';
+      if (parkingType.toString().toUpperCase().contains('UCRETSIZ')) {
+        parkType = 'UCRETSIZ';
+      } else if (parkingType.toString().toUpperCase().contains('UCRETLI')) {
+        parkType = 'UCRETLI';
+      } else if (parkingType.toString().toUpperCase().contains('KAPALI')) {
+        parkType = 'KAPALI';
+      }
+      
+      try {
+        final icon = await _getMarkerIcon(parkType);
+        
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(name),
+            position: LatLng(lat, lng),
+            infoWindow: InfoWindow(
+              title: name,
+              snippet: 'Kapasite: $capacity\nÇalışma Saatleri: $workHours\nÜcret: $parkingType',
+            ),
+            icon: icon,
+            onTap: () {
+              _showParkingDetailsBottomSheet(parking);
+            },
           ),
-          icon: icon,
-          onTap: () {
-            _showParkingDetailsBottomSheet(parking);
-          },
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error creating marker for $name: $e');
+        );
+      } catch (e) {
+        debugPrint('Error creating marker for $name: $e');
+      }
     }
+
+    debugPrint('Created ${newMarkers.length} markers from $validCoordinates valid coordinates');
+
+    if (!mounted) return; // mounted kontrolü
+    
+    setState(() {
+      _markers = newMarkers;
+    });
   }
-
-  debugPrint('Created ${newMarkers.length} markers from $validCoordinates valid coordinates');
-
-  setState(() {
-    _markers = newMarkers;
-  });
-}
 
   // Otopark detaylarını gösteren alt sayfa
-  void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.8,
-          expand: false,
-          builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        margin: const EdgeInsets.only(bottom: 12),
+// Otopark detaylarını gösteren alt sayfa
+// Otopark detaylarını gösteren alt sayfa
+// Otopark detaylarını gösteren alt sayfa
+void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
+  // Otoparkın boş yer sayısını hesapla (örnek olarak - gerçek API'den gelecek)
+  final capacity = int.tryParse(parking['KAPASITE']?.toString() ?? '0') ?? 0;
+  final estimatedUsage = (capacity * 0.7).toInt(); // Tahmini kullanım
+  final emptySpaces = capacity - estimatedUsage;
+  
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) {
+      // Favorilere eklenip eklenmediğini kontrol etmek için bir değişken
+      // StatefulBuilder içinde tanımlandı
+      bool isFavorite = false;
+      
+      return StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            minChildSize: 0.4,
+            maxChildSize: 0.8,
+            expand: false,
+            builder: (context, scrollController) {
+              return SingleChildScrollView(
+                controller: scrollController,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      
+                      // Başlık ve favorileme butonu
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              parking['OTOPARK_ADI'] ?? 'Bilinmeyen Otopark',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: isFavorite ? Colors.red : Colors.grey,
+                            ),
+                            onPressed: () {
+                              setModalState(() {
+                                isFavorite = !isFavorite;
+                                
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(isFavorite 
+                                      ? 'Favorilere eklendi' 
+                                      : 'Favorilerden çıkarıldı'
+                                    ),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      
+                      const Divider(height: 24),
+                      
+                      // Boş yer bilgisi
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
+                          color: emptySpaces > 0 ? Colors.green[50] : Colors.red[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: emptySpaces > 0 ? Colors.green : Colors.red,
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              emptySpaces > 0 
+                                ? '$emptySpaces Boş Yer Mevcut' 
+                                : 'Boş Yer Yok',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: emptySpaces > 0 ? Colors.green[800] : Colors.red[800],
+                              ),
+                            ),
+                            Text(
+                              'Toplam Kapasite: ${parking['KAPASITE'] ?? 'Bilinmiyor'}',
+                              style: TextStyle(
+                                color: Colors.grey[800],
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    Center(
-                      child: Text(
-                        parking['OTOPARK_ADI'] ?? 'Bilinmeyen Otopark',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Otopark bilgileri
+                      _buildInfoRow('İlçe', parking['ILCE'] ?? 'Bilinmiyor'),
+                      _buildInfoRow('Adres', parking['ADRES'] ?? 'Adres bilgisi yok'),
+                      _buildInfoRow('Çalışma Saatleri', parking['CALISMA_SAATLERI'] ?? 'Bilinmiyor'),
+                      _buildInfoRow('Ücret Durumu', parking['UCRET_DURUMU'] ?? 'Bilinmiyor'),
+                      _buildInfoRow('Ücretsiz Park Süresi', parking['UCRETSIZ_PARK_SURESI'] ?? 'Bilgi yok'),
+                      _buildInfoRow('Tarife', parking['TARIFE'] ?? 'Bilgi yok'),
+                      _buildInfoRow('Telefon', parking['TELEFON'] ?? 'Telefon bilgisi yok'),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Butonlar
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.directions),
+                              label: const Text('Yol Tarifi Al'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF246AFB),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                final lat = double.tryParse(parking['ENLEM']?.toString() ?? '') ?? 0;
+                                final lng = double.tryParse(parking['BOYLAM']?.toString() ?? '') ?? 0;
+                                
+                                if (lat != 0 && lng != 0) {
+                                  // Haritada göster
+                                  _mapController?.animateCamera(
+                                    CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16),
+                                  );
+                                  
+                                  // Yol tarifi için harici uygulamayı aç
+                                  final String destination = '$lat,$lng';
+                                  final String parkingName = Uri.encodeComponent(parking['OTOPARK_ADI'] ?? 'Otopark');
+                                  
+                                  // Kullanıcı konumu varsa, onu başlangıç noktası olarak kullan
+                                  String origin = '';
+                                  if (_userLocation != null) {
+                                    origin = '&origin=${_userLocation!.latitude},${_userLocation!.longitude}';
+                                  }
+                                  
+                                  // Google Maps URL'i oluştur
+                                  final url = 'https://www.google.com/maps/dir/?api=1$origin&destination=$destination&destination_place_id=$parkingName&travelmode=driving';
+                                  
+                                  final Uri uri = Uri.parse(url);
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Harita uygulaması açılamadı')),
+                                      );
+                                    }
+                                  }
+                                } else {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Bu otopark için konum bilgisi bulunamadı')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const Divider(height: 24),
-                    _buildInfoRow('Kapasite', parking['KAPASITE'] ?? 'Bilinmiyor'),
-                    _buildInfoRow('Adres', parking['ADRES'] ?? 'Adres bilgisi yok'),
-                    _buildInfoRow('Çalışma Saatleri', parking['CALISMA_SAATLERI'] ?? 'Bilinmiyor'),
-                    _buildInfoRow('Ücret Durumu', parking['UCRET_DURUMU'] ?? 'Bilinmiyor'),
-                    _buildInfoRow('İlçe', parking['ILCE'] ?? 'Bilinmiyor'),
-                    _buildInfoRow('Telefon', parking['TELEFON'] ?? 'Telefon bilgisi yok'),
-                    
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.directions),
-                        label: const Text('Yol Tarifi Al'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF246AFB),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          final lat = double.tryParse(parking['ENLEM']?.toString() ?? '') ?? 0;
-                          final lng = double.tryParse(parking['BOYLAM']?.toString() ?? '') ?? 0;
-                          if (lat != 0 && lng != 0) {
-                            _mapController?.animateCamera(
-                              CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+              );
+            },
+          );
+        }
+      );
+    },
+  );
+}
 
   // Bilgi satırı widget'ı
   Widget _buildInfoRow(String title, String value) {
@@ -526,12 +655,15 @@ class _MapScreenState extends State<MapScreen> {
               zoom: 12,
             ),
             myLocationEnabled: true,
-            myLocationButtonEnabled: false,
+            myLocationButtonEnabled: true,
+            zoomControlsEnabled: true,
             compassEnabled: true,
+            mapToolbarEnabled: true,
             trafficEnabled: _showTrafficCondition,
             onMapCreated: (controller) {
               setState(() {
                 _mapController = controller;
+                _getCurrentLocation();
               });
             },
             markers: _markers,
@@ -649,6 +781,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
