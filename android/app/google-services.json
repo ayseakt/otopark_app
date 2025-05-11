@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "881594386289",
+    "project_id": "otoparkuygulama",
+    "storage_bucket": "otoparkuygulama.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:881594386289:android:04a583e114a4eb179918d0",
+        "android_client_info": {
+          "package_name": "com.example.otopark_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1eTJZqAOKs2tlSZC7hRj_YSCDH-yl2K0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
