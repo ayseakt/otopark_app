@@ -40,7 +40,13 @@ class _MapScreenState extends State<MapScreen> {
   List<Map<String, dynamic>> _allParkingData = [];
     
  final List<Map<String, dynamic>> _favoriteParkingSpots = [];
-  
+    // API URL'leri
+ final Map<String, String> _apiUrls = {
+    'AÇIK OTOPARK': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=959c08c4-3e62-4e20-9e45-c334b0df31b1&',
+    'KAPALI OTOPARK': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=6ad4ad67-5923-49ec-8725-3f44f6f72aec&',
+    'YOL KENARI': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&'
+  };
+
   bool _isFavoriteParking(Map<String, dynamic> parking) {
     final parkingId = parking['OTOPARK_ADI']?.toString() ?? '';
     return _favoriteParkingSpots.any((favParking) => 
@@ -114,6 +120,7 @@ void _toggleFavorite(Map<String, dynamic> parking) {
       ),
     );
   }
+  @override
   void initState() {
     super.initState();
     
@@ -206,34 +213,32 @@ void _toggleFavorite(Map<String, dynamic> parking) {
     }
   }
 
-  // İzmir Açık Veri Portalından otopark verilerini çekme
+  // Tüm API'lerden otopark verilerini çekme
   Future<void> _fetchAndSetParkingMarkers() async {
     setState(() {
       _isLoading = true;
+      _allParkingData = []; // Önceki verileri temizle
     });
 
-    const url =
-        'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&limit=5';
-
     try {
-      final response = await http.get(Uri.parse(url));
-      
-      if (!mounted) return; // mounted kontrolü
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List records = data['result']['records'];
-
-        // Tüm parkların verilerini saklama
-        _allParkingData = List<Map<String, dynamic>>.from(records.map((record) => 
-          Map<String, dynamic>.from(record)
-        ));
-
-        // Filtreleme olmadan tüm işaretçileri ayarlama
-        _applyFilters();
-      } else {
-        throw Exception('API hatası: ${response.statusCode}');
+      // Her API için ayrı ayrı veri çek
+      for (final entry in _apiUrls.entries) {
+        final parkingType = entry.key;
+        final url = entry.value;
+        
+        debugPrint('Fetching data from API: $parkingType');
+        
+        final data = await _fetchParkingData(url, parkingType);
+        if (data.isNotEmpty) {
+          _allParkingData.addAll(data);
+        }
       }
+
+      debugPrint('Total parking data fetched: ${_allParkingData.length}');
+      
+      // Filtreleme olmadan tüm işaretçileri ayarlama
+      _applyFilters();
+      
     } catch (e) {
       debugPrint('Veri çekme hatası: $e');
       if (!mounted) return; // mounted kontrolü
@@ -249,18 +254,50 @@ void _toggleFavorite(Map<String, dynamic> parking) {
       }
     }
   }
+    // Tek bir API'den veri çekme
+  Future<List<Map<String, dynamic>>> _fetchParkingData(String url, String parkingType) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List records = data['result']['records'];
+        
+        // Her kayda otopark tipini ekle
+        return List<Map<String, dynamic>>.from(records.map((record) {
+          final map = Map<String, dynamic>.from(record);
+          map['OTOPARK_TIPI'] = parkingType; // Otopark tipini ekle
+          return map;
+        }));
+      } else {
+        debugPrint('API hatası: ${response.statusCode} for $parkingType');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Veri çekme hatası ($parkingType): $e');
+      return [];
+    }
+  }
 
   // Özel işaretçi simgesi oluşturma (farklı durumlar için farklı renkler)
-  Future<BitmapDescriptor> _getMarkerIcon(String type) async {
+  Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
+    // Otopark tipine göre hue değerleri
+    final Map<String, double> parkingTypeHues = {
+      'AÇIK OTOPARK': BitmapDescriptor.hueBlue,
+      'KAPALI OTOPARK': BitmapDescriptor.hueOrange, 
+      'YOL KENARI': BitmapDescriptor.hueCyan,
+    };
+    
+    // Ücrete göre hue değerleri
     switch (type) {
       case 'KAPALI':
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
       case 'UCRETLI':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
+        return BitmapDescriptor.defaultMarkerWithHue(parkingTypeHues[parkingType] ?? BitmapDescriptor.hueViolet);
       case 'UCRETSIZ':
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
       default:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+        return BitmapDescriptor.defaultMarkerWithHue(parkingTypeHues[parkingType] ?? BitmapDescriptor.hueBlue);
     }
   }
 
@@ -326,7 +363,7 @@ void _toggleFavorite(Map<String, dynamic> parking) {
       }
       
       try {
-        final icon = await _getMarkerIcon(parkType);
+        final icon = await _getMarkerIcon(parkType, parking['OTOPARK_TIPI'] ?? 'AÇIK OTOPARK');
         
         newMarkers.add(
           Marker(
@@ -355,6 +392,34 @@ void _toggleFavorite(Map<String, dynamic> parking) {
       _markers = newMarkers;
     });
   }
+    // Bilgi satırı oluşturucu widget
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   // Otopark detaylarını gösteren alt sayfa
 // Otopark detaylarını gösteren alt sayfa
@@ -365,6 +430,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
   final capacity = int.tryParse(parking['KAPASITE']?.toString() ?? '0') ?? 0;
   final estimatedUsage = (capacity * 0.7).toInt(); // Tahmini kullanım
   final emptySpaces = capacity - estimatedUsage;
+  final parkingType = parking['OTOPARK_TIPI'] ?? 'AÇIK OTOPARK';
   
   showModalBottomSheet(
     context: context,
@@ -409,9 +475,22 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(
-                              parking['OTOPARK_ADI'] ?? 'Bilinmeyen Otopark',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  parking['OTOPARK_ADI'] ?? 'Bilinmeyen Otopark',
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  parkingType,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           IconButton(
@@ -558,7 +637,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
 }
 
   // Bilgi satırı widget'ı
-  Widget _buildInfoRow(String title, String value) {
+  Widget _buildDetailInfoRow(String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
