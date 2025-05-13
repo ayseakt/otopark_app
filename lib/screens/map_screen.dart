@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' show max , min;
 
+
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -23,8 +24,9 @@ class _MapScreenState extends State<MapScreen> {
   bool _showFreeParking = false;
   bool _show24HourParking = false;
   bool _showTrafficCondition = false;
-  bool _showPetrolStations = false;  // Yeni eklenen
-  bool _showCarWashes = false;       // Yeni eklenen
+  bool _showPetrolStations = false;  
+  bool _showCarWashes = false;       
+
   // Filtre butonu pozisyonu
   Offset _filterButtonPosition = const Offset(20, 300);
   
@@ -38,7 +40,7 @@ class _MapScreenState extends State<MapScreen> {
   Set<Marker> _markers = {};
   
   // Tüm otopark verileri
-  List<Map<String, dynamic>> _allParkingData = [];
+   List<Map<String, dynamic>> _allParkingData = [];
   Future<List<Map<String, dynamic>>> _fetchPlacesData(String placeType) async {
   try {
     final apiKey = 'AIzaSyDiTgTw4XKZYsx51Uap4dYseatMij9d0I8';
@@ -72,7 +74,7 @@ class _MapScreenState extends State<MapScreen> {
             'OTOPARK_TIPI': placeType == 'petrol_ofisi' ? 'PETROL OFİSİ' : 'OTO YIKAMA',
             'PLACE_ID': place['place_id'],
             'RATING': place['rating']?.toString() ?? 'Değerlendirme yok',
-            'UCRET_DURUMU': 'UCRETLI',  // Varsayılan değer
+            // 'UCRET_DURUMU': 'UCRETLI',  // Varsayılan değer
             'CALISMA_SAATLERI': place['opening_hours']?['open_now'] == true ? 'Şu an açık' : 'Bilgi yok',
           };
         }));
@@ -91,15 +93,15 @@ class _MapScreenState extends State<MapScreen> {
 }
     
   final List<Map<String, dynamic>> _favoriteParkingSpots = [];
-  
-  // API URL'leri
+    // API URL'leri
   final Map<String, String> _apiUrls = {
     'AÇIK OTOPARK': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=959c08c4-3e62-4e20-9e45-c334b0df31b1&',
     'KAPALI OTOPARK': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=6ad4ad67-5923-49ec-8725-3f44f6f72aec&',
     'YOL KENARI': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=a982c5d9-931d-4a75-a61d-23127d8ddad2&',
-    'TARIFE': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=8dca3fb5-b7fe-4f16-91af-d8248da59f87&'
+    'TARIFE': 'https://acikveri.bizizmir.com/api/3/action/datastore_search?resource_id=8dca3fb5-b7fe-4f16-91af-d8248da59f87',
+    'SERVİS' : 'https://ulasav.csb.gov.tr/api/3/action/datastore_search?resource_id=8b183e98-9f93-4b88-81c5-424e08b8428f'
   };
-
+  
   // Tarife bilgilerini depolamak için map
   Map<String, Map<String, dynamic>> _tarifeBilgileri = {};
 
@@ -108,10 +110,10 @@ class _MapScreenState extends State<MapScreen> {
     return _favoriteParkingSpots.any((favParking) => 
       favParking['OTOPARK_ADI']?.toString() == parkingId);
   }
-  
   // Yükleniyor durumu
   bool _isLoading = true;
   StreamSubscription<Position>? _positionStreamSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -133,7 +135,6 @@ class _MapScreenState extends State<MapScreen> {
       }
     });
   }
-  
   void _showFavoritesDialog() {
     showDialog(
       context: context,
@@ -188,8 +189,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
   
-
-
   void _listenToLocationChanges() {
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -274,7 +273,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Tarife bilgilerini çekme
+    // Tarife bilgilerini çekme
 Future<void> _fetchTarifeData() async {
   try {
     final url = _apiUrls['TARIFE']!;
@@ -496,29 +495,30 @@ void _addInfoField(StringBuffer buffer, String label, dynamic value) {
 }
 
 
-  // Tüm API'lerden otopark verilerini çekme
-Future<void> _fetchAndSetParkingMarkers() async {
-  setState(() {
-    _isLoading = true;
-    _allParkingData = []; // Önceki verileri temizle
-  });
 
-  try {
-    // Her API için ayrı ayrı veri çek (tarife hariç)
-    for (final entry in _apiUrls.entries) {
-      final parkingType = entry.key;
-      final url = entry.value;
-      
-      // Tarife API'sini atla, onu ayrı işliyoruz
-      if (parkingType == 'TARIFE') continue;
-      
-      debugPrint('Fetching data from API: $parkingType');
-      
-      final data = await _fetchParkingData(url, parkingType);
-      if (data.isNotEmpty) {
-        _allParkingData.addAll(data);
+  // Tüm API'lerden otopark verilerini çekme
+  Future<void> _fetchAndSetParkingMarkers() async {
+    setState(() {
+      _isLoading = true;
+      _allParkingData = []; // Önceki verileri temizle
+    });
+
+    try {
+      // Her API için ayrı ayrı veri çek
+      for (final entry in _apiUrls.entries) {
+        final parkingType = entry.key;
+        final url = entry.value;
+
+        // Tarife API'sini atla, onu ayrı işliyoruz
+        if (parkingType == 'TARIFE') continue;
+        
+        debugPrint('Fetching data from API: $parkingType');
+        
+        final data = await _fetchParkingData(url, parkingType);
+        if (data.isNotEmpty) {
+          _allParkingData.addAll(data);
+        }
       }
-    }
 
     // Eğer petrol istasyonları gösterilmek isteniyorsa
     if (_showPetrolStations) {
@@ -544,27 +544,26 @@ Future<void> _fetchAndSetParkingMarkers() async {
         _matchParkingWithTariff(parking);
       }
     }
-    
-    // Filtreleme olmadan tüm işaretçileri ayarlama
-    _applyFilters();
-    
-  } catch (e) {
-    debugPrint('Veri çekme hatası: $e');
-    if (!mounted) return; // mounted kontrolü
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Veriler çekilirken hata oluştu: $e')),
-    );
-  } finally {
-    if (mounted) { // mounted kontrolü
-      setState(() {
-        _isLoading = false;
-      });
+          
+      // Filtreleme olmadan tüm işaretçileri ayarlama
+      _applyFilters();
+      
+    } catch (e) {
+      debugPrint('Veri çekme hatası: $e');
+      if (!mounted) return; // mounted kontrolü
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Veriler çekilirken hata oluştu: $e')),
+      );
+    } finally {
+      if (mounted) { // mounted kontrolü
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-}
-  
-  // Tek bir API'den veri çekme
+    // Tek bir API'den veri çekme
   Future<List<Map<String, dynamic>>> _fetchParkingData(String url, String parkingType) async {
     try {
       final response = await http.get(Uri.parse(url));
@@ -590,24 +589,25 @@ Future<void> _fetchAndSetParkingMarkers() async {
   }
 
   // Özel işaretçi simgesi oluşturma (farklı durumlar için farklı renkler)
-Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
-  // Otopark tipine göre hue değerleri
+  Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
+
+
+  // Diğer otopark türleri için mevcut kod
   final Map<String, double> parkingTypeHues = {
     'AÇIK OTOPARK': BitmapDescriptor.hueBlue,
-    'KAPALI OTOPARK': BitmapDescriptor.hueOrange, 
+    'KAPALI OTOPARK': BitmapDescriptor.hueOrange,
     'YOL KENARI': BitmapDescriptor.hueCyan,
+    'SERVİS': BitmapDescriptor.hueYellow,
     'PETROL OFİSİ': BitmapDescriptor.hueRed,    // Yeni eklenen
     'OTO YIKAMA': BitmapDescriptor.hueViolet,   // Yeni eklenen
   };
-  
+      
   // Ücrete göre hue değerleri
   switch (type) {
     case 'KAPALI':
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
     case 'UCRETLI':
       return BitmapDescriptor.defaultMarkerWithHue(parkingTypeHues[parkingType] ?? BitmapDescriptor.hueViolet);
-    case 'UCRETSIZ':
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
     default:
       return BitmapDescriptor.defaultMarkerWithHue(parkingTypeHues[parkingType] ?? BitmapDescriptor.hueBlue);
   }
@@ -637,8 +637,10 @@ Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
 
     if (_show24HourParking) {
       filteredData = filteredData.where((parking) {
-        final workHours = parking['CALISMA_SAATLERI']?.toString() ?? '';
-        return workHours.contains('24') || workHours.toUpperCase().contains('24 SAAT');
+        final opening = parking['ACILIS_SAATI']?.toString().toUpperCase() ?? '';
+        final closing = parking['KAPANIS_SAATI']?.toString().toUpperCase() ?? '';
+        final workHours = '$opening - $closing';
+        return workHours.contains('24') || workHours.contains('24 SAAT');
       }).toList();
     }
 
@@ -662,7 +664,10 @@ Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
       final name = parking['OTOPARK_ADI'] ?? 'Bilinmeyen';
       final capacity = parking['KAPASITE'] ?? 'Bilinmiyor';
       final parkingType = parking['UCRET_DURUMU'] ?? 'Bilinmiyor';
-      final workHours = parking['CALISMA_SAATLERI'] ?? 'Bilinmiyor';
+      final workHours = (parking['ACILIS_SAATI'] != null && parking['KAPANIS_SAATI'] != null)
+    ? '${parking['ACILIS_SAATI']} - ${parking['KAPANIS_SAATI']}'
+    : 'Bilinmiyor';
+
       
       // Park tipi belirleme
       String parkType = 'NORMAL';
@@ -704,8 +709,9 @@ Future<BitmapDescriptor> _getMarkerIcon(String type, String parkingType) async {
       _markers = newMarkers;
     });
   }
-    
-  // Bilgi satırı oluşturucu widget
+
+  
+    // Bilgi satırı oluşturucu widget
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -751,7 +757,40 @@ String _formatTarifeInfo(Map<String, dynamic> parking) {
   return formattedTarife.toString().isEmpty ? 'Bilgi yok' : formattedTarife.toString();
 }
 
-  // Otopark detaylarını gösteren alt sayfa
+// Haritayı ve tüm verileri sıfırlama fonksiyonu
+  void _refreshMapAndData() {
+    // Arama kutusunu temizle
+    _searchController.clear();
+    
+    // Filtreleri sıfırla
+    setState(() {
+      _showEmptyParkingSpots = false;
+      _showFreeParking = false;
+      _show24HourParking = false;
+      _showTrafficCondition = false;
+      _showCarWashes = false;
+      _showPetrolStations = false;
+    });
+    
+    // Haritayı başlangıç konumuna getir
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_izmir, 12),
+      );
+    }
+    
+    // Verileri yeniden yükle
+    _fetchAndSetParkingMarkers();
+    
+    // Bildirim göster
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Harita ve filtreler sıfırlandı'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+// Otopark detaylarını gösteren alt sayfa
 void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
   // Otoparkın boş yer sayısını hesapla (örnek olarak - gerçek API'den gelecek)
   final capacity = int.tryParse(parking['KAPASITE']?.toString() ?? '0') ?? 0;
@@ -767,7 +806,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
     ),
     builder: (context) {
       // Favorilere eklenip eklenmediğini kontrol etmek için bir değişken
-      bool isFavorite = _isFavoriteParking(parking);
+    bool isFavorite = _isFavoriteParking(parking);
       
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setModalState) {
@@ -825,13 +864,20 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                               color: isFavorite ? Colors.red : Colors.grey,
                             ),
                             onPressed: () {
-                              // Burada favorilere ekleme/çıkarma işlemi yapılmalı
                               setModalState(() {
-                                // isFavorite değerini değiştir
-                                // Örnek: _toggleFavoriteParking(parking);
-                                // isFavorite = !isFavorite;
+                                isFavorite = !isFavorite;
+                                _toggleFavorite(parking); // <-- Add this
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(isFavorite 
+                                        ? 'Favorilere eklendi' 
+                                        : 'Favorilerden çıkarıldı'),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
                               });
                             },
+
                           ),
                         ],
                       ),
@@ -873,7 +919,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                       ),
                       
                       const SizedBox(height: 16),
-                    
+                      
                       // Otopark bilgileri
                       _buildInfoRow('İlçe', parking['ILCE'] ?? 'Bilinmiyor'),
                       _buildInfoRow('Adres', parking['ADRES'] ?? 'Adres bilgisi yok'),
@@ -883,6 +929,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                       ),
                       _buildInfoRow('Ücret Durumu', parking['UCRET_DURUMU'] ?? 'Bilinmiyor'),
                       _buildInfoRow('Ücretsiz Park Süresi', parking['UCRETSIZ_PARK_SURESI'] ?? 'Bilgi yok'),
+                      // _buildInfoRow('Tarife', parking['otopark_ucretleri'] ?? 'Bilgi yok'),
                       
                       // Petrol ofisleri ve oto yıkamalar için özel alanlar
                       if (parking['OTOPARK_TIPI'] == 'PETROL OFİSİ' || parking['OTOPARK_TIPI'] == 'OTO YIKAMA') ...[
@@ -891,13 +938,12 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
                           _buildInfoRow('Değerlendirme', '${parking['RATING']} / 5.0'),
                         
                         // Place ID için ayrı bir alan (geliştirici için)
-                        if (parking['PLACE_ID'] != null)
-                          _buildInfoRow('Place ID', parking['PLACE_ID']),
+                        // if (parking['PLACE_ID'] != null)
+                        //   _buildInfoRow('Place ID', parking['PLACE_ID']),
                       ],
                       
-                      _buildInfoRow('Tarife', _formatTarifeInfo(parking)),
-                      _buildInfoRow('Telefon', parking['TELEFON'] ?? 'Telefon bilgisi yok'),
-                      
+                      // _buildInfoRow('Tarife', _formatTarifeInfo(parking)),
+
                       const SizedBox(height: 24),
                       
                       // Butonlar
@@ -964,7 +1010,7 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
               );
             },
           );
-        },
+        }
       );
     },
   );
@@ -1047,60 +1093,52 @@ void _showParkingDetailsBottomSheet(Map<String, dynamic> parking) {
     );
   }
 
-Widget _buildFilterPanel(StateSetter setModalState) {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Wrap(
-      children: [
-        Center(
-          child: Container(
-            width: 40,
-            height: 5,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
+  Widget _buildFilterPanel(StateSetter setModalState) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Wrap(
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
-        ),
-        const Text(
-          'Filtreler',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        _buildFilterOption(
-          'Boş Park Yerleri', 
-          _showEmptyParkingSpots, 
-          (value) {
-            setModalState(() => _showEmptyParkingSpots = value);
-            setState(() => _showEmptyParkingSpots = value);
-          },
-        ),
-        _buildFilterOption(
-          'Ücretsiz Otoparklar', 
-          _showFreeParking, 
-          (value) {
-            setModalState(() => _showFreeParking = value);
-            setState(() => _showFreeParking = value);
-          },
-        ),
-        _buildFilterOption(
-          '24 Saat Açık Olanlar', 
-          _show24HourParking, 
-          (value) {
-            setModalState(() => _show24HourParking = value);
-            setState(() => _show24HourParking = value);
-          },
-        ),
-        _buildFilterOption(
-          'Trafik Durumunu Göster', 
-          _showTrafficCondition, 
-          (value) {
-            setModalState(() => _showTrafficCondition = value);
-            setState(() => _showTrafficCondition = value);
-          },
-        ),
-        // Yeni filtre seçenekleri
+          const Text(
+            'Filtreler',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          _buildFilterOption(
+            'Boş Park Yerleri', 
+            _showEmptyParkingSpots, 
+            (value) {
+              setModalState(() => _showEmptyParkingSpots = value);
+              setState(() => _showEmptyParkingSpots = value);
+            },
+          ),
+          _buildFilterOption(
+            '24 Saat Açık Olanlar', 
+            _show24HourParking, 
+            (value) {
+              setModalState(() => _show24HourParking = value);
+              setState(() => _show24HourParking = value);
+            },
+          ),
+          _buildFilterOption(
+            'Trafik Durumunu Göster', 
+            _showTrafficCondition, 
+            (value) {
+              setModalState(() => _showTrafficCondition = value);
+              setState(() => _showTrafficCondition = value);
+            },
+          ),
+                  // Yeni filtre seçenekleri
         _buildFilterOption(
           'Petrol Ofislerini Göster', 
           _showPetrolStations, 
@@ -1117,123 +1155,174 @@ Widget _buildFilterPanel(StateSetter setModalState) {
             setState(() => _showCarWashes = value);
           },
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () {
-              _fetchAndSetParkingMarkers(); // Tüm veriyi yeniden çek
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF246AFB),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                _fetchAndSetParkingMarkers(); // Tüm veriyi yeniden çek
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text('Uygula'),
             ),
-            child: const Text('Uygula'),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
+
 @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('EgeParkGo', style: TextStyle(color: Colors.white)),
-      backgroundColor: const Color(0xFF246AFB),
-      actions: [
-        // Add this button to the AppBar
-        IconButton(
-          icon: const Icon(Icons.favorite, color: Colors.white),
-          onPressed: _showFavoritesDialog,
-          tooltip: 'Favoriler',
-        ),
-      ],
-    ),
-    body: Stack(
-      children: [
-        // Google Harita
-        GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: _izmir,
-            zoom: 12,
+  Widget build(BuildContext context) {
+      return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        toolbarHeight: 0,
+      ),
+      body: Stack(
+        children: [
+          // Google Harita
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: _izmir,
+              zoom: 12,
+            ),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+            zoomControlsEnabled: true,
+            compassEnabled: true,
+            mapToolbarEnabled: true,
+            trafficEnabled: _showTrafficCondition,
+            onMapCreated: (controller) {
+              setState(() {
+                _mapController = controller;
+                _getCurrentLocation();
+              });
+            },
+            markers: _markers,
           ),
-          myLocationEnabled: true,
-          myLocationButtonEnabled: true,
-          zoomControlsEnabled: true,
-          compassEnabled: true,
-          mapToolbarEnabled: true,
-          trafficEnabled: _showTrafficCondition,
-          onMapCreated: (controller) {
-            setState(() {
-              _mapController = controller;
-              _getCurrentLocation();
-            });
-          },
-          markers: _markers,
-        ),
-        
-        // Yükleniyor göstergesi
-        if (_isLoading)
-          Container(
-            color: Colors.black.withAlpha(128),
-            child: const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF246AFB)),
+          
+          // Yükleniyor göstergesi
+          if (_isLoading)
+            Container(
+              color: Colors.black.withAlpha(128),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF246AFB)),
+                ),
               ),
             ),
-          ),
-        
-        // Arama kutusu
-        Positioned(
-          top: 10,
-          left: 10,
-          right: 10,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(51),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
+          
+          // Arama kutusu ve Favori ikonu yan yana
+          Positioned(
+            top: 10,
+            left: 10,
+            right: 10,
+            child: Row(
+              children: [
+                // Arama kutusu
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(198, 255, 255, 255),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(51),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Otopark ara...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => _searchController.clear(),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                      ),
+                      onSubmitted: (_) => _searchLocation(),
+                    ),
+                  ),
+                ),
+                
+                // Favoriler butonu
+                Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(198, 255, 255, 255),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(51),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.favorite, color: Color.fromARGB(255, 255, 2, 2)),
+                    onPressed: _showFavoritesDialog,
+                    tooltip: 'Favoriler',
+                  ),
                 ),
               ],
             ),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Otopark ara...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => _searchController.clear(),
+          ),
+          
+          // Filtre butonu
+          Positioned(
+            left: _filterButtonPosition.dx,
+            top: _filterButtonPosition.dy,
+            child: GestureDetector(
+              onPanUpdate: (details) {
+                setState(() {
+                  _filterButtonPosition += details.delta;
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 76, 67, 174),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(51),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                child: IconButton(
+                  icon: const Icon(Icons.filter_list, color: Colors.white),
+                  onPressed: _toggleFilterPanel,
+                  iconSize: 24,
+                ),
               ),
-              onSubmitted: (_) => _searchLocation(),
             ),
           ),
-        ),
-        
-        // Filtre butonu
-        Positioned(
-          left: _filterButtonPosition.dx,
-          top: _filterButtonPosition.dy,
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                _filterButtonPosition += details.delta;
-              });
-            },
+          
+          // Lejant (işaretçi tipleri açıklaması)
+          Positioned(
+            bottom: 80,
+            right: 10,
             child: Container(
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF246AFB),
-                shape: BoxShape.circle,
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withAlpha(51),
@@ -1242,99 +1331,128 @@ Widget build(BuildContext context) {
                   ),
                 ],
               ),
-              child: IconButton(
-                icon: const Icon(Icons.filter_list, color: Colors.white),
-                onPressed: _toggleFilterPanel,
-                iconSize: 24,
-              ),
-            ),
-          ),
-        ),
-        
-        
-        // Lejant (işaretçi tipleri açıklaması)
-        Positioned(
-          bottom: 80,
-          right: 10,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(51),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
+                          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildLegendItem(BitmapDescriptor.hueBlue, 'Açık Otopark'),
                 _buildLegendItem(BitmapDescriptor.hueOrange, 'Kapalı Otopark'),
                 _buildLegendItem(BitmapDescriptor.hueCyan, 'Yol Kenarı'),
-                _buildLegendItem(BitmapDescriptor.hueGreen, 'Ücretsiz'),
                 // Yeni lejant öğeleri
                 if (_showPetrolStations)
                   _buildLegendItem(BitmapDescriptor.hueRed, 'Petrol Ofisi'),
                 if (_showCarWashes)
                   _buildLegendItem(BitmapDescriptor.hueViolet, 'Oto Yıkama'),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "refreshButton",
+            backgroundColor: const Color.fromARGB(255, 218, 103, 37),
+            mini: true,
+            onPressed: _refreshMapAndData,
+            child: const Icon(Icons.refresh, color: Colors.white),
+          ),
+          const SizedBox(height: 5),
+          FloatingActionButton(
+            heroTag: "locationButton",
+            backgroundColor: const Color(0xFF246AFB),
+            mini: true,
+            onPressed: () {
+              if (_userLocation != null) {
+                _mapController?.animateCamera(
+                  CameraUpdate.newLatLngZoom(_userLocation!, 15),
+                );
+              } else {
+                _getCurrentLocation();
+              }
+            },
+            child: const Icon(Icons.my_location, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildFilterOption(String title, bool value, Function(bool) onChanged) {
+    // Zengin renk paleti
+    final primaryColor = const Color(0xFF2E7D32);    // Koyu yeşil
+    final secondaryColor = const Color(0xFFE3F2FD);  // Açık yeşil arka plan
+    final accentColor = const Color(0xFF4CAF50);     // Orta ton yeşil
+   
+  return Container(
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    decoration: BoxDecoration(
+      color: value ? secondaryColor : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: value ? primaryColor : Colors.grey.shade200,
+        width: 1.5,
+      ),
+      boxShadow: value ? [
+        BoxShadow(
+          color: primaryColor.withOpacity(0.15),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        )
+      ] : null,
     ),
-    floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-    floatingActionButton: Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        FloatingActionButton(
-          heroTag: "refreshButton",
-          backgroundColor: const Color(0xFF246AFB),
-          mini: true,
-          onPressed: _fetchAndSetParkingMarkers,
-          child: const Icon(Icons.refresh, color: Colors.white),
+        Row(
+          children: [
+            Icon(
+              _getFilterIcon(title),
+              color: value ? primaryColor : Colors.grey.shade400,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: value ? FontWeight.w600 : FontWeight.w400,
+                color: value ? primaryColor : Colors.grey.shade700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          heroTag: "locationButton",
-          backgroundColor: const Color(0xFF246AFB),
-          onPressed: () {
-            if (_userLocation != null) {
-              _mapController?.animateCamera(
-                CameraUpdate.newLatLngZoom(_userLocation!, 15),
-              );
-            } else {
-              _getCurrentLocation();
-            }
-          },
-          child: const Icon(Icons.my_location, color: Colors.white),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: Colors.white,
+          activeTrackColor: accentColor,
+          inactiveThumbColor: Colors.grey.shade300,
+          inactiveTrackColor: Colors.grey.shade200,
         ),
       ],
     ),
   );
 }
 
-  Widget _buildFilterOption(String title, bool value, Function(bool) onChanged) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: const Color(0xFF246AFB),
-          ),
-        ],
-      ),
-    );
+// Filtre başlığına göre uygun ikon seçimi
+IconData _getFilterIcon(String title) {
+  switch (title) {
+    case 'Boş Park Yerleri':
+      return Icons.money_off;
+    case 'Trafik Durumunu Göster':
+      return Icons.traffic;
+    case '24 Saat Açık Olanlar':
+      return Icons.access_time;
+    default:
+      return Icons.filter_list;
   }
+}
+
   
   Widget _buildLegendItem(double hue, String label) {
     return Padding(
