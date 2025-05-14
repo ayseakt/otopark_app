@@ -6,7 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' show max , min;
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -16,6 +16,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  
   GoogleMapController? _mapController;
   final TextEditingController _searchController = TextEditingController();
 
@@ -117,7 +118,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    
+    _loadFavorites();
     _getCurrentLocation();
     _listenToLocationChanges();
     _fetchTarifeData().then((_) {
@@ -133,6 +134,7 @@ class _MapScreenState extends State<MapScreen> {
       } else {
         _favoriteParkingSpots.add(parking);
       }
+      _saveFavorites(); // Favorileri kaydet
     });
   }
   void _showFavoritesDialog() {
@@ -272,7 +274,43 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
   }
-
+// Favorileri cihaza kaydetme metodu
+Future<void> _saveFavorites() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Favorileri JSON formatına dönüştür
+    final favoritesJson = _favoriteParkingSpots.map((parking) => 
+      jsonEncode(parking)).toList();
+    
+    // JSON listesini SharedPreferences'a kaydet
+    await prefs.setStringList('favorites', favoritesJson);
+    debugPrint('Favoriler kaydedildi: ${favoritesJson.length} öğe');
+  } catch (e) {
+    debugPrint('Favorileri kaydetme hatası: $e');
+  }
+}
+// Favorileri cihazdan yükleme metodu
+Future<void> _loadFavorites() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // SharedPreferences'dan JSON listesini al
+    final favoritesJson = prefs.getStringList('favorites') ?? [];
+    
+    // JSON'dan Map'e dönüştür
+    _favoriteParkingSpots.clear();
+    for (String jsonItem in favoritesJson) {
+      final parking = Map<String, dynamic>.from(jsonDecode(jsonItem));
+      _favoriteParkingSpots.add(parking);
+    }
+    
+    debugPrint('Favoriler yüklendi: ${_favoriteParkingSpots.length} öğe');
+    setState(() {}); // UI'ı güncelle
+  } catch (e) {
+    debugPrint('Favorileri yükleme hatası: $e');
+  }
+}
     // Tarife bilgilerini çekme
 Future<void> _fetchTarifeData() async {
   try {
